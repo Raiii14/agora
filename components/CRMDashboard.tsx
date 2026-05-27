@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Sparkles, Star, X, ArrowUpRight, CheckCircle2 } from "lucide-react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
@@ -32,7 +32,7 @@ type Task = {
 };
 
 type Lead = {
-  id: number;
+  id: string;
   name: string;
   company: string;
   stage: Stage;
@@ -49,7 +49,7 @@ type Lead = {
 };
 
 type DragItem = {
-  id: number;
+  id: string;
   stage: Stage;
 };
 
@@ -78,7 +78,7 @@ const STAGES: Array<{
 
 const INITIAL_LEADS: Lead[] = [
   {
-    id: 1,
+    id: "lead_001",
     name: "Optivance",
     company: "Optivance",
     stage: "new",
@@ -100,7 +100,7 @@ const INITIAL_LEADS: Lead[] = [
       "Thanks for the quick intro today. I’ve attached the deck and a simple pilot outline so we can keep things moving.",
   },
   {
-    id: 2,
+    id: "lead_002",
     name: "Velvet & Volt",
     company: "Velvet & Volt",
     stage: "new",
@@ -121,7 +121,7 @@ const INITIAL_LEADS: Lead[] = [
       "Great speaking today. I’ll send a short demo invite and a few setup notes so your team can take a look.",
   },
   {
-    id: 3,
+    id: "lead_003",
     name: "Arcanis Group",
     company: "Arcanis Group",
     stage: "outreach",
@@ -142,7 +142,7 @@ const INITIAL_LEADS: Lead[] = [
       "Following up with the seat-based quote we discussed. Happy to answer any rollout questions before we book time.",
   },
   {
-    id: 4,
+    id: "lead_004",
     name: "Cybrink",
     company: "Cybrink",
     stage: "outreach",
@@ -163,7 +163,7 @@ const INITIAL_LEADS: Lead[] = [
       "Just checking in with one useful example from a similar team. If timing is off, I can circle back later.",
   },
   {
-    id: 5,
+    id: "lead_005",
     name: "Aura",
     company: "Aura",
     stage: "in-call",
@@ -185,7 +185,7 @@ const INITIAL_LEADS: Lead[] = [
       "Great conversation today. I’ll send the implementation outline and some integration notes so we can keep the momentum.",
   },
   {
-    id: 6,
+    id: "lead_006",
     name: "Salto",
     company: "Salto",
     stage: "in-call",
@@ -206,7 +206,7 @@ const INITIAL_LEADS: Lead[] = [
       "I’ll send the ROI example we discussed and a short recap of how the pilot would work on your side.",
   },
   {
-    id: 7,
+    id: "lead_007",
     name: "Virelia Corp",
     company: "Virelia Corp",
     stage: "closed",
@@ -227,7 +227,7 @@ const INITIAL_LEADS: Lead[] = [
       "Welcome aboard. I’ve attached the onboarding pack and a quick kickoff agenda so we can get your team rolling.",
   },
   {
-    id: 8,
+    id: "lead_008",
     name: "Luminatech",
     company: "Luminatech",
     stage: "closed",
@@ -277,9 +277,9 @@ function LeadCard({
   onMove,
 }: {
   lead: Lead;
-  onOpen: (id: number) => void;
-  onToggleStar: (id: number) => void;
-  onMove: (id: number, stage: Stage) => void;
+  onOpen: (id: string) => void;
+  onToggleStar: (id: string) => void;
+  onMove: (id: string, stage: Stage) => void;
 }) {
   const [{ isDragging }, dragRef] = useDrag(
     () => ({
@@ -300,7 +300,9 @@ function LeadCard({
 
   return (
     <div
-      ref={dragRef}
+      ref={(node) => {
+        dragRef(node);
+      }}
       role="button"
       tabIndex={0}
       onClick={() => onOpen(lead.id)}
@@ -399,9 +401,9 @@ function KanbanColumn({
 }: {
   stage: (typeof STAGES)[number];
   leads: Lead[];
-  onOpen: (id: number) => void;
-  onToggleStar: (id: number) => void;
-  onMove: (id: number, stage: Stage) => void;
+  onOpen: (id: string) => void;
+  onToggleStar: (id: string) => void;
+  onMove: (id: string, stage: Stage) => void;
 }) {
   const [{ isOver, canDrop }, dropRef] = useDrop(
     () => ({
@@ -419,7 +421,9 @@ function KanbanColumn({
 
   return (
     <section
-      ref={dropRef}
+      ref={(node) => {
+        dropRef(node);
+      }}
       className={cn(
         "flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm",
         isOver && canDrop && "ring-2 ring-violet-300"
@@ -464,9 +468,68 @@ function KanbanColumn({
 
 export default function CRMDashboard() {
   const [leads, setLeads] = useState<Lead[]>(INITIAL_LEADS);
-  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("summary");
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLeads = async () => {
+      try {
+        const response = await fetch("/api/leads", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load leads (${response.status})`);
+        }
+
+        const data = (await response.json()) as Lead[];
+
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          setLeads(data);
+          setLoadError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error ? error.message : "Failed to load leads"
+          );
+        }
+      }
+    };
+
+    void loadLeads();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const persistLeadPatch = useCallback(
+    async (id: string, changes: Partial<Lead>) => {
+      try {
+        const response = await fetch(`/api/leads/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(changes),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to update lead (${response.status})`);
+        }
+      } catch (error) {
+        setLoadError(
+          error instanceof Error ? error.message : "Failed to save lead changes"
+        );
+      }
+    },
+    []
+  );
 
   const visibleLeads = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -506,18 +569,27 @@ export default function CRMDashboard() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const moveLead = (id: number, stage: Stage) => {
+  const moveLead = (id: string, stage: Stage) => {
     setLeads((current) =>
       current.map((lead) => (lead.id === id ? { ...lead, stage } : lead))
     );
+    void persistLeadPatch(id, { stage });
   };
 
-  const toggleStar = (id: number) => {
+  const toggleStar = (id: string) => {
+    let nextStarred = false;
+
     setLeads((current) =>
-      current.map((lead) =>
-        lead.id === id ? { ...lead, starred: !lead.starred } : lead
-      )
+      current.map((lead) => {
+        if (lead.id !== id) {
+          return lead;
+        }
+
+        nextStarred = !lead.starred;
+        return { ...lead, starred: nextStarred };
+      })
     );
+    void persistLeadPatch(id, { starred: nextStarred });
   };
 
   return (
@@ -558,6 +630,11 @@ export default function CRMDashboard() {
                 </div>
               </div>
             </div>
+            {loadError && (
+              <div className="border-t border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-700">
+                {loadError}
+              </div>
+            )}
           </header>
 
           <div className="flex flex-1 overflow-hidden">

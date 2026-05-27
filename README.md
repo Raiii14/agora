@@ -109,6 +109,34 @@ Microsoft TTS is also supported by `lib/agora-server.ts` if
 `TTS_VENDOR=microsoft` and the Microsoft key, region, and voice variables are
 provided.
 
+## Couchbase Capella Data API
+
+For the CRM dashboard, the app uses the Capella Data API from Next.js API
+routes. The browser never connects to Couchbase directly.
+
+Put these values in Vercel Project Settings > Environment Variables, and copy
+the same values into `.env.local` for local development:
+
+```env
+CAPELLA_DATA_API_BASE_URL=https://<cluster-id>.data.cloud.couchbase.com
+CAPELLA_DATA_API_USERNAME=...
+CAPELLA_DATA_API_PASSWORD=...
+CAPELLA_BUCKET=agora
+CAPELLA_SCOPE=crm
+CAPELLA_COLLECTION=leads
+```
+
+The Vercel app reads those values in server routes only:
+
+- `GET /api/capella-test` checks the connection with `/v1/callerIdentity`
+- `GET /api/leads` loads dashboard cards
+- `POST /api/leads` creates a lead document
+- `PATCH /api/leads/[id]` updates a lead
+- `DELETE /api/leads/[id]` removes a lead
+
+If you want to move the same data into a different bucket or collection later,
+change the env vars only. No code change is needed unless the schema changes.
+
 ## API
 
 - `POST /api/session`
