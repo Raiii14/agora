@@ -9,22 +9,42 @@ Keep this file short. If a rule becomes obsolete, update or remove it instead of
 - Project: Agora Hackathon Philippines 2026 AI Sales Agent
 - Users:
 - Goal: Build the next generation of AI-powered sales solutions using real-time Voice AI.
-- Current stage: Initialization / Ideation
-- Primary repository/app: Local / Current Working Directory
+- Current stage: Working prototype; text replies work, AI voice playback still needs TTS/audio debugging
+- Primary repository/app: Next.js app in this repository
 - Non-goals:
 
 ## Tech Stack
 
-- Language(s):
-- Frontend:
-- Backend:
-- Database: Couchbase (Partner Tech)
-- Infrastructure: Agora Conversational AI / TEN Framework (Required for Hackathon)
-- Key dependencies: TRAE (IDE/Workflow Partner)
+- Language(s): TypeScript
+- Frontend: Next.js App Router, React, Tailwind, Agora RTC client
+- Backend: Next.js API routes for session creation and Agora agent start/stop
+- Database: None currently implemented; Couchbase is a hackathon partner technology, not active in this repo
+- Infrastructure: Agora RTC and Agora Conversational AI Agent REST API
+- Key dependencies: `agora-rtc-react`, `agora-token`, LLM provider, TTS provider
+
+## Current Working Pipeline
+
+Plain-English flow:
+
+1. User clicks Start in the browser.
+2. Browser calls `/api/session`.
+3. Backend creates the Agora channel, browser UID, and browser RTC token.
+4. Browser joins Agora and publishes microphone audio.
+5. Browser calls `/api/agent/start`.
+6. Backend starts one Agora Conversational AI agent in that same channel.
+7. Agora transcribes the user's speech.
+8. The transcript goes to the configured LLM provider.
+9. The LLM reply returns as text.
+10. Agora sends user and AI transcript messages back to the browser.
+11. Agora should synthesize the AI reply through TTS and publish audio back to the browser.
+12. `/api/agent/stop` stops the agent and cleans up the session.
+
+Known boundary: steps 1-10 are working. Step 11, AI voice playback, is the next
+debugging target.
 
 ## Commit Format
 
-- Convention: (e.g. `feat: ...`, `fix: ...`, `chore: ...` — or leave blank if no format required)
+- Convention: Conventional-style commits such as `feat: ...`, `fix: ...`, `chore: ...`
 
 ## Source Order
 
@@ -97,11 +117,12 @@ Do not turn `PROJECT_HANDOFF.md` into a session diary or duplicate facts already
 
 Allowed:
 
-- 
+- Keep changes scoped to the voice-agent flow and public-safe documentation.
 
 Avoid:
 
-- 
+- Do not add debug endpoints that expose environment variable presence or values.
+- Do not commit `.env.local`, live keys, private context, or local MCP tooling config.
 
 Requires confirmation:
 

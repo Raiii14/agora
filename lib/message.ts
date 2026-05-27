@@ -1,5 +1,5 @@
 import { decodeStreamMessage } from '@/lib/utils';
-import { IAgoraRTCClient, UID } from 'agora-rtc-react';
+import type { IAgoraRTCClient, UID } from 'agora-rtc-react';
 
 const DEFAULT_MESSAGE_CACHE_TIMEOUT = 1000 * 60 * 5; // 5 minutes
 const DEFAULT_INTERVAL = 200; // milliseconds

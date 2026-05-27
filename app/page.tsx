@@ -1,6 +1,5 @@
-import LandingPage from '@/components/LandingPage'
+import VoiceAgentApp from '@/components/VoiceAgentApp';
 
 export default function Home() {
-  return <LandingPage />
+  return <VoiceAgentApp />;
 }
-
