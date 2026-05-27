@@ -2,8 +2,9 @@
 
 Minimal Next.js client for an Agora Conversational AI voice loop.
 
-Project context lives in `context/`. Treat `context/eventguidelines.md` and
-`context/judges.md` as the source of truth for hackathon constraints.
+Project context lives in `context/`. Treat `context/eventguidelines.md`,
+`context/judges.md`, and `context/HACKATHON_OPTIMIZED_WORKFLOW.md` as the
+current source of truth for hackathon scope and workflow.
 
 ## Working Pipeline
 
@@ -24,6 +25,27 @@ The app currently uses one simple browser-to-agent loop:
 
 Current working boundary: steps 1-10 work locally. Step 11, AI voice playback,
 is still being debugged.
+
+## Optimized Hackathon Workflow
+
+The team direction is to keep the prototype simple, demoable, and aligned with
+Agora's voice-first strengths:
+
+1. Staff logs in on the Vercel-hosted website.
+2. Staff opens the demo CRM dashboard.
+3. Staff starts an Agora voice room from the app.
+4. The AI joins that Agora channel as a participant.
+5. The AI listens continuously and updates live lead signals.
+6. When someone says a wake phrase like "Hey Agora" or clicks Ask AI, the
+   agent replies with TTS.
+7. After the call ends, the backend generates a summary, action items, and a
+   lead score.
+8. The final report is stored in Couchbase.
+9. The CRM dashboard reads that report and shows the updated sales record.
+
+This repo should stay focused on the voice room, post-call intelligence, and
+demo CRM handoff. External meeting bots and full third-party CRM integrations
+remain out of scope for the hackathon MVP.
 
 ## Setup
 

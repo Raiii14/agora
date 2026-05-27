@@ -20,7 +20,7 @@ Working:
 - Current minimal Next.js voice app now sends an Agora sample-compatible agent payload: RTC+RTM agent token, `agent_rtm_uid`, wildcard `remote_rtc_uids`, RTM enabled, transcript protocol v2 enabled, dump enabled, ASR vendor `ares`, LLM style `openai`, and semantic end-of-speech detection.
 - Port 3000 dev server was restarted after a stale `.next` runtime error (`Cannot find module './79.js'`). Fresh HTTP and headless Chrome DevTools Protocol checks load `/` successfully.
 - User reported the AI now sends text replies back, confirming the browser-to-Agora-to-LLM-to-transcript loop is working.
-- Simple pipeline reference is documented in `README.md` and `context/PROJECT_GUIDE.md`.
+- The workflow docs now point at the optimized hackathon path: Vercel website, Agora voice room, AI live scoring, post-call report, Couchbase-backed CRM demo.
 
 In progress:
 
@@ -28,7 +28,6 @@ In progress:
 
 Blocked:
 
-- Chrome DevTools MCP is not exposed in the current Codex session. Direct Chrome DevTools Protocol checks are available as a fallback.
 
 ## Last Meaningful Changes
 
@@ -54,7 +53,7 @@ Blocked:
 
 1. Inspect Agora agent response/dump logs and ElevenLabs account/provider errors for the missing voice audio.
 2. Confirm whether the agent publishes a remote audio track and whether the browser receives `user-published` for audio.
-3. If TTS/audio remains blocked, consider switching TTS provider or using Agora Agent Builder pipeline mode before migrating the full app to the official `agent-samples` client/toolkit.
+3. Keep the CRM/report workflow decoupled so meeting, intelligence, and dashboard work can continue in parallel once voice playback is stable.
 
 ## Closeout Checklist
 

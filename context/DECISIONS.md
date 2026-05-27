@@ -60,3 +60,32 @@ Status: active
 References:
 - `README.md`
 - `context/PROJECT_HANDOFF.md`
+
+### 2026-05-27 - Use Agora Voice Rooms for Hackathon Demo
+
+Decision:
+
+Build the hackathon demo around an Agora Voice Calling room inside the Next.js app, with a demo CRM dashboard and post-call intelligence stored in Couchbase.
+
+Why:
+
+The team needs a reliable, controllable meeting surface that fits the hackathon timeline. Agora voice rooms can be created and joined from the app itself, so the demo stays self-contained and avoids brittle Zoom/Meet/Teams bot integrations.
+
+Alternatives considered:
+
+- Integrate with third-party meeting apps.
+- Build a desktop bot or browser automation bridge.
+- Make the CRM integration the primary product surface.
+
+Consequences:
+- Positive: Faster path to a stable demo; better alignment with Agora's voice-first theme.
+- Negative: External meeting-app compatibility is deferred.
+- Risks: The CRM remains a demo system until a real connector layer is added later.
+
+Supersedes: N/A
+
+Status: active
+
+References:
+- `README.md`
+- `context/HACKATHON_OPTIMIZED_WORKFLOW.md`
