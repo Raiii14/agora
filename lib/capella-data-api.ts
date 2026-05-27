@@ -64,14 +64,53 @@ function env(name: string, fallbackName?: string, defaultValue?: string) {
   return value;
 }
 
+function ensureConfiguredValue(name: string, value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    throw new Error(`Missing environment variable: ${name}`);
+  }
+
+  if (trimmed === "..." || /<[^>]+>/.test(trimmed)) {
+    throw new Error(
+      `Environment variable ${name} still looks like a placeholder. Set it to the real Couchbase Capella value before starting the dashboard.`
+    );
+  }
+
+  return trimmed;
+}
+
+function normalizeBaseUrl(value: string) {
+  const baseUrl = ensureConfiguredValue("CAPELLA_DATA_API_BASE_URL", value).replace(/\/+$/, "");
+
+  try {
+    const parsedUrl = new URL(baseUrl);
+
+    if (!parsedUrl.hostname || parsedUrl.hostname.includes("<")) {
+      throw new Error("placeholder hostname");
+    }
+  } catch {
+    throw new Error(
+      "CAPELLA_DATA_API_BASE_URL must be the full Capella Data API endpoint, for example https://<cluster-id>.data.cloud.couchbase.com"
+    );
+  }
+
+  return baseUrl;
+}
+
 export function getCapellaConfig(): CapellaConfig {
   return {
-    baseUrl: env(
-      "CAPELLA_DATA_API_BASE_URL",
-      "NEXT_PUBLIC_CAPELLA_DATA_API_BASE_URL"
-    ).replace(/\/+$/, ""),
-    username: env("CAPELLA_DATA_API_USERNAME", "NEXT_PUBLIC_CAPELLA_DATA_API_USERNAME"),
-    password: env("CAPELLA_DATA_API_PASSWORD", "NEXT_PUBLIC_CAPELLA_DATA_API_PASSWORD"),
+    baseUrl: normalizeBaseUrl(
+      env("CAPELLA_DATA_API_BASE_URL", "NEXT_PUBLIC_CAPELLA_DATA_API_BASE_URL")
+    ),
+    username: ensureConfiguredValue(
+      "CAPELLA_DATA_API_USERNAME",
+      env("CAPELLA_DATA_API_USERNAME", "NEXT_PUBLIC_CAPELLA_DATA_API_USERNAME")
+    ),
+    password: ensureConfiguredValue(
+      "CAPELLA_DATA_API_PASSWORD",
+      env("CAPELLA_DATA_API_PASSWORD", "NEXT_PUBLIC_CAPELLA_DATA_API_PASSWORD")
+    ),
     bucket: env("CAPELLA_BUCKET", "NEXT_PUBLIC_CAPELLA_BUCKET", "agora"),
     scope: env("CAPELLA_SCOPE", "NEXT_PUBLIC_CAPELLA_SCOPE", "crm"),
     collection: env(
@@ -124,16 +163,29 @@ async function capellaRequest(path: string, init: RequestInit = {}) {
 
   if (!response.ok) {
     const message =
-      typeof body === "object" && body !== null && "message" in body
-        ? String((body as { message?: unknown }).message)
-        : typeof body === "object" && body !== null && "error" in body
-          ? String((body as { error?: unknown }).error)
-          : `Capella request failed with ${response.status}`;
+      typeof body === "string" && body.trim()
+        ? body.trim()
+        : typeof body === "object" && body !== null && "message" in body
+          ? String((body as { message?: unknown }).message)
+          : typeof body === "object" && body !== null && "error" in body
+            ? String((body as { error?: unknown }).error)
+            : `Capella request failed with ${response.status}`;
 
     throw new Error(message);
   }
 
   return { response, body };
+}
+
+export async function checkCapellaConnection() {
+  const { body } = await capellaRequest("/v1/callerIdentity");
+
+  return {
+    user:
+      typeof body === "object" && body !== null && "user" in body
+        ? String((body as { user?: unknown }).user ?? "")
+        : null,
+  };
 }
 
 export function mapLeadDocumentToCard(document: RawLeadDocument): LeadCardData {

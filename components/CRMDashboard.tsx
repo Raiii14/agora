@@ -294,7 +294,15 @@ export default function CRMDashboard() {
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to load leads (${response.status})`);
+          const payload = (await response.json().catch(() => null)) as
+            | { error?: unknown }
+            | null;
+          const errorMessage =
+            payload && typeof payload.error === "string"
+              ? payload.error
+              : `Failed to load leads (${response.status})`;
+
+          throw new Error(errorMessage);
         }
 
         const data = (await response.json()) as LeadCardData[];
