@@ -5,47 +5,47 @@ If a visual decision is architecturally significant, record it in `context/DECIS
 
 ## Aesthetic
 
-Direction: Clean, developer-friendly, high-contrast. (TBD based on actual application design)
-Reference: N/A
+Direction: White canvas, dark ink, restrained editorial layout.
+Reference: `context/DESIGN.md`
 
 ## Tokens
 
 ```css
 :root {
-  --bg:       ;   /* page background */
-  --surface:  ;   /* card / panel background */
-  --primary:  ;   /* main brand color */
-  --accent:   ;   /* highlights, links, decorative */
-  --text:     ;   /* primary text */
-  --muted:    ;   /* secondary / caption text */
-  --border:   ;   /* border / divider */
+  --bg: #ffffff;          /* page background */
+  --surface: #f8fafc;     /* subtle surface background */
+  --primary: #181d26;     /* main brand color */
+  --accent: #1b61c9;      /* highlights, links, decorative */
+  --text: #181d26;        /* primary text */
+  --muted: #41454d;       /* secondary / caption text */
+  --border: #dddddd;      /* border / divider */
 }
 ```
 
 ## Type
 
-- Font:
-- Scale:
-- Weight:
+- Font: Haas Groot Disp, Haas, sans-serif for headings; Haas, sans-serif for body.
+- Scale: Large display headings, readable body copy, restrained hierarchy.
+- Weight: Modest weights only; avoid heavy or overly bold headline treatment.
 
 ## Radius
 
-- Small:
-- Medium:
-- Full:
+- Small: 6px
+- Medium: 10px
+- Full: 9999px
 
 ## Spacing
 
-- Base unit:
-- Scale:
+- Base unit: 8px
+- Scale: 12px, 16px, 24px, 32px, 96px for section spacing.
 
 ## Rules
 
-<!-- Fill Tokens and Type above before treating these as active constraints. They record decisions made for this project, not defaults for every project. -->
+These are the active constraints for the landing page and shared UI. Keep them aligned with `context/DESIGN.md`.
 
-1. **Hero Constraints:** H1 headlines must use wide containers to guarantee they flow in 2-3 lines max. Subtext must be under 20 words. BANNED: Eyebrow badges/pills above the H1 (e.g., 'Now in Public Beta', 'Beta', 'Launch'). Hero top padding must provide enough vertical breathing room under the nav.
-2. **Physical Interactions:** Primary buttons must use full-pill shapes. Nest trailing icons (e.g., `->`) in a circular background disc inside the button's right padding. Animate exclusively via transform and opacity using spring physics; no default ease-in-out.
-3. **Layout Breakouts:** Ban wrapping every section in the same rigid, centered container. Break the box: use full-bleed sections (e.g., edge-to-edge background dividers or infinite marquees) and asymmetric breakouts while text remains aligned to the baseline.
-4. **Readability & Contrast:** Secondary text and ghost CTAs must remain legible. Avoid low-contrast grays that blend into the background. Use opacity-based coloring to guarantee WCAG AA contrast across light and dark modes.
-5. **Vertical Grid Alignment:** Multi-column layouts must align items vertically to prevent massive empty voids when one column's content is significantly shorter than the other's.
-6. **Display Leading & Tracking:** Large display headers (H1/H2) must use tight line-height and tight tracking to maintain visual cohesion and prevent lines from drifting apart.
+1. Hero headings must use wide containers and stay to 2-3 lines max.
+2. Do not place eyebrow badges or pill labels above the main H1.
+3. Primary buttons should stay pill-shaped and use the primary color.
+4. Keep the page on a white background with strong dark text contrast.
+5. Use simple spacing and layout breaks instead of card-heavy marketing blocks.
+6. Keep display headings tight in line-height and tracking.
