@@ -33,13 +33,19 @@ export default function Home() {
           move.
         </h1>
         <p className="max-w-2xl text-lg leading-7 text-slate-600">
-          ARIA turns live conversations into scores, tasks, and follow-ups so
-          every lead stays on track without extra busywork.
+          ARIA turns live conversations into meeting reports, tasks, and
+          follow-ups so every lead stays on track without extra busywork.
         </p>
         <div className="flex flex-wrap gap-3">
           <Link
-            href="/dashboard"
+            href="/meeting"
             className="rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+          >
+            Start meeting
+          </Link>
+          <Link
+            href="/dashboard"
+            className="rounded-full border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-900"
           >
             Enter the CRM board
           </Link>
@@ -51,8 +57,7 @@ export default function Home() {
           <div>
             <p className="text-sm font-semibold text-slate-900">Live signals</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Surface urgency, next steps, and lead score changes during the
-              call.
+              Surface urgency, next steps, and useful context during the call.
             </p>
           </div>
           <div>

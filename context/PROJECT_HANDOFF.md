@@ -21,6 +21,9 @@ Working:
 - Port 3000 dev server was restarted after a stale `.next` runtime error (`Cannot find module './79.js'`). Fresh HTTP and headless Chrome DevTools Protocol checks load `/` successfully.
 - User reported the AI now sends text replies back, confirming the browser-to-Agora-to-LLM-to-transcript loop is working.
 - The workflow docs now point at the optimized hackathon path: Vercel website, Agora voice room, AI live scoring, post-call report, Couchbase-backed CRM demo.
+- `/meeting` hosts the voice room. The landing page has a **Start meeting** button that links there.
+- The voice room has a share button that copies a `/meeting?room=...` link, and `/api/session` can create a token for that requested channel.
+- After **Stop**, the meeting UI keeps the transcript visible and shows a post-call meeting report without lead scoring.
 
 In progress:
 
@@ -35,6 +38,7 @@ Blocked:
 - Updated `lib/agora-server.ts` and `app/api/agent/start/route.ts` to align the start-agent payload with Agora's official agent-samples payload shape without adding new dependencies.
 - Removed the `/api/test` debug route so certificate-related environment checks are not exposed.
 - Added `.mcp.json` to `.gitignore` so local MCP tooling config is not accidentally staged.
+- Removed the voice room Events panel/log-event UI path and replaced it with a simple post-stop meeting report.
 
 ## Risks or Stale Facts
 
@@ -48,6 +52,7 @@ Blocked:
 - Live end-to-end AI voice playback was not verified.
 - Browser console check via direct Chrome DevTools Protocol showed only the React DevTools info message on initial page load; no runtime exception reproduced after restarting the dev server.
 - `pnpm build` and `pnpm exec tsc --noEmit --pretty false` passed after cleanup. HTTP smoke checks passed for `/` and `/api/session`; removed `/api/test` now returns 404.
+- On 2026-05-27, `pnpm exec tsc --noEmit --pretty false` and `pnpm build` passed. A fresh `pnpm dev --hostname localhost --port 3000` server loaded `/` and `/meeting` successfully, with only the existing Node engine warning because the shell uses Node 24.12.0 while `package.json` asks for 20.10.0.
 
 ## Next Focus
 

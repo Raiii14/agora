@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
+import { CheckCircle2, Copy, Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
 import {
   EMessageEngineMode,
   IMessageListItem,
@@ -22,6 +22,15 @@ type AgentStartResponse = {
   [key: string]: unknown;
 };
 
+type MeetingReport = {
+  durationSeconds: number;
+  endedAt: string;
+  summary: string;
+  actionItems: string[];
+  transcript: string;
+  messageCount: number;
+};
+
 type CallState =
   | 'idle'
   | 'creating-session'
@@ -29,6 +38,7 @@ type CallState =
   | 'starting-agent'
   | 'live'
   | 'stopping'
+  | 'report'
   | 'error';
 
 const stateLabel: Record<CallState, string> = {
@@ -38,13 +48,8 @@ const stateLabel: Record<CallState, string> = {
   'starting-agent': 'Starting agent',
   live: 'Live',
   stopping: 'Stopping',
+  report: 'Report ready',
   error: 'Needs attention',
-};
-
-type StreamChunk = {
-  partIdx: number;
-  partSum: number;
-  content: string;
 };
 
 function messageRole(message: IMessageListItem, session: SessionData | null) {
@@ -55,6 +60,73 @@ function messageRole(message: IMessageListItem, session: SessionData | null) {
   if (uid === '0') return 'AI';
 
   return `UID ${uid}`;
+}
+
+function formatDuration(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (minutes === 0) return `${remainingSeconds}s`;
+
+  return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
+}
+
+function buildMeetingReport(
+  startTime: number,
+  messages: IMessageListItem[],
+  session: SessionData | null
+): MeetingReport {
+  const durationSeconds = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : 0;
+  const transcript = messages
+    .map((message) => `${messageRole(message, session)}: ${message.text}`)
+    .join('\n');
+  const userTurns = messages.filter((message) => messageRole(message, session) === 'You');
+  const aiTurns = messages.filter((message) => messageRole(message, session) === 'AI');
+
+  return {
+    durationSeconds,
+    endedAt: new Date().toLocaleString(),
+    messageCount: messages.length,
+    summary:
+      messages.length > 0
+        ? `Captured ${messages.length} transcript turn${
+            messages.length === 1 ? '' : 's'
+          } across ${formatDuration(durationSeconds)}. The conversation included ${
+            userTurns.length
+          } user turn${userTurns.length === 1 ? '' : 's'} and ${
+            aiTurns.length
+          } AI response${aiTurns.length === 1 ? '' : 's'}.`
+        : `The meeting ended after ${formatDuration(
+            durationSeconds
+          )}, but no transcript messages were captured.`,
+    actionItems:
+      messages.length > 0
+        ? [
+            'Review the transcript for customer commitments and follow-up details.',
+            'Add the meeting notes to the CRM record.',
+            'Send a concise follow-up while the conversation is fresh.',
+          ]
+        : [
+            'Confirm microphone, transcript, and agent settings before the next meeting.',
+            'Add any manual notes from the conversation to the CRM record.',
+          ],
+    transcript: transcript || 'No transcript captured.',
+  };
+}
+
+function requestedRoomFromUrl() {
+  if (typeof window === 'undefined') return null;
+
+  const room = new URLSearchParams(window.location.search).get('room')?.trim();
+  return room || null;
+}
+
+function buildRoomLink(channel: string) {
+  if (typeof window === 'undefined') return '';
+
+  const url = new URL('/meeting', window.location.origin);
+  url.searchParams.set('room', channel);
+  return url.toString();
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -79,19 +151,25 @@ export default function VoiceAgentApp() {
   const [micEnabled, setMicEnabled] = useState(true);
   const [messages, setMessages] = useState<IMessageListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [events, setEvents] = useState<string[]>([]);
+  const [report, setReport] = useState<MeetingReport | null>(null);
+  const [roomLink, setRoomLink] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const clientRef = useRef<any>(null);
   const micTrackRef = useRef<any>(null);
   const messageEngineRef = useRef<MessageEngine | null>(null);
-  const streamChunkCacheRef = useRef<Record<string, StreamChunk[]>>({});
   const stoppingRef = useRef(false);
+  const startTimeRef = useRef(0);
+  const messagesRef = useRef<IMessageListItem[]>([]);
+  const sessionRef = useRef<SessionData | null>(null);
 
-  const logEvent = useCallback((event: string) => {
-    const stamp = new Date().toLocaleTimeString();
-    setEvents((current) => [`${stamp} ${event}`, ...current].slice(0, 12));
-    console.log(`[VoiceAgent] ${event}`);
-  }, []);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   const cleanupLocalResources = useCallback(async () => {
     const client = clientRef.current;
@@ -103,7 +181,6 @@ export default function VoiceAgentApp() {
         messageEngineRef.current.cleanup();
         messageEngineRef.current = null;
       }
-      streamChunkCacheRef.current = {};
 
       if (client && micTrack) {
         await client.unpublish([micTrack]).catch(() => undefined);
@@ -125,49 +202,17 @@ export default function VoiceAgentApp() {
     }
   }, []);
 
-  const inspectStreamPayload = useCallback((payload: Uint8Array) => {
+  const copyRoomLink = useCallback(async () => {
+    if (!roomLink) return;
+
     try {
-      const text = new TextDecoder().decode(payload);
-      const [messageId, partIdx, partSum, content] = text.split('|');
-      const parsedPartSum = partSum === '???' ? -1 : Number(partSum);
-
-      if (!messageId || !partIdx || !content || parsedPartSum < 1) {
-        return null;
-      }
-
-      const cache = streamChunkCacheRef.current;
-      cache[messageId] = cache[messageId] ?? [];
-
-      if (!cache[messageId].some((part) => part.partIdx === Number(partIdx))) {
-        cache[messageId].push({
-          partIdx: Number(partIdx),
-          partSum: parsedPartSum,
-          content,
-        });
-      }
-
-      if (cache[messageId].length !== parsedPartSum) {
-        return null;
-      }
-
-      const encoded = cache[messageId]
-        .sort((a, b) => a.partIdx - b.partIdx)
-        .map((part) => part.content)
-        .join('');
-      delete cache[messageId];
-
-      return JSON.parse(window.atob(encoded)) as {
-        object?: string;
-        text?: string;
-        stream_id?: number;
-        turn_status?: number;
-        quiet?: boolean;
-      };
-    } catch (error) {
-      console.debug('[VoiceAgent] Failed to inspect stream payload', error);
-      return null;
+      await navigator.clipboard.writeText(roomLink);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setError('Unable to copy the room link from this browser.');
     }
-  }, []);
+  }, [roomLink]);
 
   const stopConversation = useCallback(async () => {
     if (stoppingRef.current) return;
@@ -184,30 +229,46 @@ export default function VoiceAgentApp() {
           body: JSON.stringify({ agentId }),
         });
       }
+
+      setReport(
+        buildMeetingReport(startTimeRef.current, messagesRef.current, sessionRef.current)
+      );
+      setCallState('report');
+    } catch (err) {
+      console.error('Error stopping conversation:', err);
+      setError(err instanceof Error ? err.message : 'Failed to stop conversation');
+      setCallState('error');
     } finally {
       await cleanupLocalResources();
       setAgentId(null);
       setSession(null);
-      setMessages([]);
-      setCallState('idle');
+      setRoomLink('');
       stoppingRef.current = false;
-      logEvent('Conversation stopped');
     }
-  }, [agentId, cleanupLocalResources, logEvent]);
+  }, [agentId, cleanupLocalResources]);
 
   const startConversation = useCallback(async () => {
-    if (callState !== 'idle' && callState !== 'error') return;
+    if (callState !== 'idle' && callState !== 'error' && callState !== 'report') {
+      return;
+    }
 
     setError(null);
+    setReport(null);
     setMessages([]);
-    setEvents([]);
+    setRoomLink('');
+    startTimeRef.current = Date.now();
     setCallState('creating-session');
 
     try {
-      const sessionResponse = await fetch('/api/session', { method: 'POST' });
+      const requestedRoom = requestedRoomFromUrl();
+      const sessionResponse = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestedRoom ? { channel: requestedRoom } : {}),
+      });
       const nextSession = await readJson<SessionData>(sessionResponse);
       setSession(nextSession);
-      logEvent(`Session ${nextSession.channel} created for UID ${nextSession.uid}`);
+      setRoomLink(buildRoomLink(nextSession.channel));
 
       setCallState('joining');
 
@@ -218,64 +279,39 @@ export default function VoiceAgentApp() {
       });
       clientRef.current = client;
 
-      client.on('connection-state-change', (current: string, previous: string) => {
-        logEvent(`RTC ${previous} -> ${current}`);
-      });
-
       client.on('user-joined', (user: { uid: string | number }) => {
-        logEvent(`Remote user joined: ${user.uid}`);
         if (user.uid.toString() === nextSession.agentUid) {
           setAgentConnected(true);
         }
       });
 
       client.on('user-left', (user: { uid: string | number }) => {
-        logEvent(`Remote user left: ${user.uid}`);
         if (user.uid.toString() === nextSession.agentUid) {
           setAgentConnected(false);
         }
       });
 
       client.on('user-published', async (user: any, mediaType: string) => {
-        logEvent(`Remote user ${user.uid} published ${mediaType}`);
         await client.subscribe(user, mediaType);
 
         if (mediaType === 'audio') {
           user.audioTrack?.play();
           setAgentConnected(user.uid.toString() === nextSession.agentUid);
-          logEvent(`Playing remote audio from ${user.uid}`);
         }
       });
 
-      client.on('stream-message', (uid: string | number, payload: Uint8Array) => {
-        const decoded = inspectStreamPayload(payload);
-        if (!decoded) return;
-
-        console.debug('[VoiceAgent] Decoded stream message', decoded);
-
-        if (decoded.object === 'assistant.transcription') {
-          logEvent(
-            decoded.text
-              ? `Assistant transcript: ${decoded.text.slice(0, 80)}`
-              : `Assistant transcript received, quiet=${String(decoded.quiet)}`
-          );
-        }
-      });
-
-      const joinedUid = await client.join(
+      await client.join(
         nextSession.appId,
         nextSession.channel,
         nextSession.token,
         Number(nextSession.uid)
       );
-      logEvent(`Joined RTC as UID ${joinedUid}`);
 
       const micTrack = await (AgoraRTC as any).createMicrophoneAudioTrack({
         encoderConfig: 'speech_standard',
       });
       micTrackRef.current = micTrack;
       await client.publish([micTrack]);
-      logEvent('Microphone published');
 
       messageEngineRef.current = new MessageEngine(
         client,
@@ -306,7 +342,6 @@ export default function VoiceAgentApp() {
 
       setAgentId(nextAgentId);
       setCallState('live');
-      logEvent(`Agent started${nextAgentId ? `: ${nextAgentId}` : ''}`);
     } catch (startError) {
       console.error('Failed to start voice agent:', startError);
       await cleanupLocalResources();
@@ -317,7 +352,7 @@ export default function VoiceAgentApp() {
       );
       setCallState('error');
     }
-  }, [callState, cleanupLocalResources, inspectStreamPayload, logEvent]);
+  }, [callState, cleanupLocalResources]);
 
   const toggleMic = useCallback(async () => {
     if (!micTrackRef.current || callState !== 'live') return;
@@ -325,8 +360,7 @@ export default function VoiceAgentApp() {
     const nextEnabled = !micEnabled;
     await micTrackRef.current.setEnabled(nextEnabled);
     setMicEnabled(nextEnabled);
-    logEvent(nextEnabled ? 'Microphone unmuted' : 'Microphone muted');
-  }, [callState, logEvent, micEnabled]);
+  }, [callState, micEnabled]);
 
   useEffect(() => {
     return () => {
@@ -376,6 +410,16 @@ export default function VoiceAgentApp() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={copyRoomLink}
+                  disabled={!roomLink}
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm font-medium text-zinc-100 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-45"
+                  title="Copy room link"
+                >
+                  {linkCopied ? <CheckCircle2 size={17} /> : <Copy size={17} />}
+                  {linkCopied ? 'Copied' : 'Share'}
+                </button>
                 <button
                   type="button"
                   onClick={toggleMic}
@@ -463,6 +507,11 @@ export default function VoiceAgentApp() {
                   </dd>
                 </div>
               </dl>
+              {roomLink && (
+                <p className="mt-4 truncate rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-400">
+                  {roomLink}
+                </p>
+              )}
               {error && (
                 <div className="mt-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
                   {error}
@@ -470,16 +519,51 @@ export default function VoiceAgentApp() {
               )}
             </div>
 
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-              <h2 className="text-sm font-semibold text-zinc-200">Events</h2>
-              <div className="mt-3 space-y-2 text-xs text-zinc-400">
-                {events.length === 0 ? (
-                  <p>No events yet.</p>
-                ) : (
-                  events.map((event, index) => <p key={`${event}-${index}`}>{event}</p>)
-                )}
+            {report && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+                <h2 className="text-sm font-semibold text-zinc-200">
+                  Meeting report
+                </h2>
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-zinc-500">Duration</dt>
+                    <dd className="mt-1 text-zinc-200">
+                      {formatDuration(report.durationSeconds)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-500">Transcript turns</dt>
+                    <dd className="mt-1 text-zinc-200">{report.messageCount}</dd>
+                  </div>
+                </dl>
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Summary
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-300">
+                    {report.summary}
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Action items
+                  </p>
+                  <ul className="mt-2 space-y-2 text-sm leading-6 text-zinc-300">
+                    {report.actionItems.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-sm font-medium text-zinc-200">
+                    Transcript
+                  </summary>
+                  <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-950 p-3 text-xs leading-5 text-zinc-400">
+                    {report.transcript}
+                  </pre>
+                </details>
               </div>
-            </div>
+            )}
           </aside>
         </section>
       </div>
